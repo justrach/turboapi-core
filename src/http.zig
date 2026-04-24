@@ -80,7 +80,7 @@ pub fn statusText(status: u16) []const u8 {
 /// Format an RFC 2822 HTTP Date header value into buf.
 /// Returns the formatted slice (e.g. "Wed, 19 Mar 2026 11:30:27 GMT").
 pub fn formatHttpDate(buf: *[40]u8) []const u8 {
-    const ts = std.time.timestamp();
+    const ts = std.Io.Clock.real.now(std.Io.Threaded.global_single_threaded.io()).toSeconds();
     const es: std.time.epoch.EpochSeconds = .{ .secs = @intCast(ts) };
     const ds = es.getDaySeconds();
     const ed = es.getEpochDay();
@@ -90,7 +90,7 @@ pub fn formatHttpDate(buf: *[40]u8) []const u8 {
     const dw = [7][]const u8{ "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
     const mn = [12][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
     return std.fmt.bufPrint(buf, "{s}, {d:0>2} {s} {d} {d:0>2}:{d:0>2}:{d:0>2} GMT", .{
-        dw[di], md.day_index + 1, mn[@intFromEnum(md.month) - 1], yd.year,
+        dw[di],               md.day_index + 1,        mn[@intFromEnum(md.month) - 1], yd.year,
         ds.getHoursIntoDay(), ds.getMinutesIntoHour(), ds.getSecondsIntoMinute(),
     }) catch "Thu, 01 Jan 2026 00:00:00 GMT";
 }
@@ -138,10 +138,23 @@ test "formatHttpDate returns valid format" {
 
 // ── Fuzz tests ──────────────────────────────────────────────────────────────
 
-fn fuzz_percentDecode(_: void, input: []const u8) anyerror!void {
+fn fuzzInput(smith: *std.testing.Smith, buf: []u8) []const u8 {
+    if (smith.in) |input| {
+        const len = @min(input.len, buf.len);
+        @memcpy(buf[0..len], input[0..len]);
+        smith.in = input[len..];
+        return buf[0..len];
+    }
+
+    const len = smith.slice(buf);
+    return buf[0..len];
+}
+
+fn fuzz_percentDecode(_: void, smith: *std.testing.Smith) anyerror!void {
+    var input_buf: [4096]u8 = undefined;
+    const input = fuzzInput(smith, &input_buf);
     var out: [4096]u8 = undefined;
-    const buf = if (input.len > 0) input[0..@min(input.len, 4096)] else input;
-    const result = percentDecode(buf, &out);
+    const result = percentDecode(input, &out);
 
     // Output must not exceed input length
     const buf_start = @intFromPtr(&out);
@@ -161,10 +174,12 @@ test "fuzz: percentDecode — output bounded, no OOB" {
         "%2G",
         "normal",
         "",
-    }});
+    } });
 }
 
-fn fuzz_queryStringGet(_: void, input: []const u8) anyerror!void {
+fn fuzz_queryStringGet(_: void, smith: *std.testing.Smith) anyerror!void {
+    var input_buf: [4096]u8 = undefined;
+    const input = fuzzInput(smith, &input_buf);
     if (input.len < 2) return;
     const split = input[0] % @as(u8, @intCast(@min(input.len, 255)));
     const key = input[1..@min(@as(usize, split) + 1, input.len)];
@@ -186,5 +201,5 @@ test "fuzz: queryStringGet — result is within input, no panic" {
         "\x00=",
         "\x01a&b=c",
         "\x00",
-    }});
+    } });
 }

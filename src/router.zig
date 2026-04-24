@@ -573,10 +573,23 @@ test "no match returns null" {
     try std.testing.expect(m == null);
 }
 
-
 // ── Fuzz tests ───────────────────────────────────────────────────────────────
 
-fn fuzz_findRoute(_: void, input: []const u8) anyerror!void {
+fn fuzzInput(smith: *std.testing.Smith, buf: []u8) []const u8 {
+    if (smith.in) |input| {
+        const len = @min(input.len, buf.len);
+        @memcpy(buf[0..len], input[0..len]);
+        smith.in = input[len..];
+        return buf[0..len];
+    }
+
+    const len = smith.slice(buf);
+    return buf[0..len];
+}
+
+fn fuzz_findRoute(_: void, smith: *std.testing.Smith) anyerror!void {
+    var input_buf: [8192]u8 = undefined;
+    const input = fuzzInput(smith, &input_buf);
     if (input.len == 0) return;
 
     // First byte selects the HTTP method
@@ -589,15 +602,15 @@ fn fuzz_findRoute(_: void, input: []const u8) anyerror!void {
     defer r.deinit();
 
     // Seed with representative routes
-    r.addRoute("GET",    "/",                  "GET /")                 catch return;
-    r.addRoute("GET",    "/users",             "GET /users")            catch return;
-    r.addRoute("GET",    "/users/{id}",        "GET /users/{id}")       catch return;
-    r.addRoute("POST",   "/users",             "POST /users")           catch return;
-    r.addRoute("PUT",    "/users/{id}",        "PUT /users/{id}")       catch return;
-    r.addRoute("DELETE", "/users/{id}",        "DELETE /users/{id}")    catch return;
-    r.addRoute("GET",    "/items/{cat}/{id}",  "GET /items/{cat}/{id}") catch return;
-    r.addRoute("GET",    "/files/*",           "GET /files/*")          catch return;
-    r.addRoute("GET",    "/health",            "GET /health")           catch return;
+    r.addRoute("GET", "/", "GET /") catch return;
+    r.addRoute("GET", "/users", "GET /users") catch return;
+    r.addRoute("GET", "/users/{id}", "GET /users/{id}") catch return;
+    r.addRoute("POST", "/users", "POST /users") catch return;
+    r.addRoute("PUT", "/users/{id}", "PUT /users/{id}") catch return;
+    r.addRoute("DELETE", "/users/{id}", "DELETE /users/{id}") catch return;
+    r.addRoute("GET", "/items/{cat}/{id}", "GET /items/{cat}/{id}") catch return;
+    r.addRoute("GET", "/files/*", "GET /files/*") catch return;
+    r.addRoute("GET", "/health", "GET /health") catch return;
 
     // Invariant: findRoute must never panic regardless of method or path content
     if (r.findRoute(method, path)) |match_c| {
@@ -610,25 +623,27 @@ fn fuzz_findRoute(_: void, input: []const u8) anyerror!void {
 }
 
 test "fuzz: router findRoute — never panics, no OOB on any path" {
-    try std.testing.fuzz({}, fuzz_findRoute, .{ .corpus = &.{
-        // method byte + path
-        "\x00/",                        // GET /
-        "\x00/users/42",                // GET /users/42
-        "\x01/users",                   // POST /users
-        "\x00/users/",                  // trailing slash
-        "\x00/items/books/99",          // multi-param
-        "\x00/health",                  // static route
-        "\x00/files/deep/nested/path",  // wildcard
-        // Adversarial inputs
-        "\x00" ++ "/" ++ ("a/" ** 70),  // 70 segments — exceeds 64-segment limit → null
-        "\x00/\x00secret",             // null byte in path
-        "\x00/" ++ ("a" ** 4096),       // very long single segment
-        "\x00/%2F%2F/../admin",         // path traversal attempt
-        "\x00/users/%00/profile",       // null byte percent-encoded
-        "\x00//double//slash//path",    // double slashes
-        "\x00/users/{injected}",        // brace injection in request path
-        "\x00/\xFF\xFE\xFD",           // invalid UTF-8
-        "\x05/anything",                // empty method string
-        "\x00",                         // no path (just method byte)
-    }});
+    try std.testing.fuzz({}, fuzz_findRoute, .{
+        .corpus = &.{
+            // method byte + path
+            "\x00/", // GET /
+            "\x00/users/42", // GET /users/42
+            "\x01/users", // POST /users
+            "\x00/users/", // trailing slash
+            "\x00/items/books/99", // multi-param
+            "\x00/health", // static route
+            "\x00/files/deep/nested/path", // wildcard
+            // Adversarial inputs
+            "\x00" ++ "/" ++ ("a/" ** 70), // 70 segments — exceeds 64-segment limit → null
+            "\x00/\x00secret", // null byte in path
+            "\x00/" ++ ("a" ** 4096), // very long single segment
+            "\x00/%2F%2F/../admin", // path traversal attempt
+            "\x00/users/%00/profile", // null byte percent-encoded
+            "\x00//double//slash//path", // double slashes
+            "\x00/users/{injected}", // brace injection in request path
+            "\x00/\xFF\xFE\xFD", // invalid UTF-8
+            "\x05/anything", // empty method string
+            "\x00", // no path (just method byte)
+        },
+    });
 }

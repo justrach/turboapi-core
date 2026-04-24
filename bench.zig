@@ -7,6 +7,14 @@ const Router = root.Router;
 
 const print = std.debug.print;
 
+fn nowNs() i96 {
+    return std.Io.Clock.awake.now(std.Io.Threaded.global_single_threaded.io()).toNanoseconds();
+}
+
+fn elapsedNs(start_ns: i96) u64 {
+    return @intCast(nowNs() - start_ns);
+}
+
 pub fn main() !void {
     const alloc = std.heap.c_allocator;
 
@@ -84,7 +92,7 @@ pub fn main() !void {
     const iters: u64 = 5_000_000;
 
     for (cases) |c| {
-        var timer = std.time.Timer.start() catch unreachable;
+        const start_ns = nowNs();
 
         for (0..iters) |_| {
             if (router.findRoute(c.method, c.path)) |m| {
@@ -93,7 +101,7 @@ pub fn main() !void {
             }
         }
 
-        const elapsed_ns = timer.read();
+        const elapsed_ns = elapsedNs(start_ns);
         const ns_per_op = elapsed_ns / iters;
         const ops_per_sec = if (ns_per_op > 0) 1_000_000_000 / ns_per_op else 0;
         print("  {s} {d:>10}/s   {d:>4}ns\n", .{ c.name, ops_per_sec, ns_per_op });
@@ -103,7 +111,7 @@ pub fn main() !void {
     print("\n  Mixed workload ({d} patterns, {d}M iterations):\n", .{ lookups.len, iters / 1_000_000 });
 
     var total_ops: u64 = 0;
-    var timer = std.time.Timer.start() catch unreachable;
+    const start_ns = nowNs();
 
     for (0..iters) |_| {
         for (lookups) |l| {
@@ -115,7 +123,7 @@ pub fn main() !void {
         }
     }
 
-    const elapsed_ns = timer.read();
+    const elapsed_ns = elapsedNs(start_ns);
     const ns_per_op = elapsed_ns / total_ops;
     const ops_per_sec = if (ns_per_op > 0) 1_000_000_000 / ns_per_op else 0;
 

@@ -10,7 +10,7 @@ pub fn BoundedCache(comptime V: type) type {
         const Self = @This();
 
         map: std.StringHashMap(V),
-        lock: std.Thread.Mutex = .{},
+        lock: std.Io.Mutex = .init,
         count: usize = 0,
         max_entries: usize,
         allocator: std.mem.Allocator,
@@ -18,7 +18,7 @@ pub fn BoundedCache(comptime V: type) type {
         pub fn init(allocator: std.mem.Allocator, max_entries: usize) Self {
             return .{
                 .map = std.StringHashMap(V).init(allocator),
-                .lock = .{},
+                .lock = .init,
                 .count = 0,
                 .max_entries = max_entries,
                 .allocator = allocator,
@@ -36,16 +36,16 @@ pub fn BoundedCache(comptime V: type) type {
 
         /// Look up a cached value. Returns null if not present.
         pub fn get(self: *Self, key: []const u8) ?V {
-            self.lock.lock();
-            defer self.lock.unlock();
+            std.Io.Threaded.mutexLock(&self.lock);
+            defer std.Io.Threaded.mutexUnlock(&self.lock);
             return self.map.get(key);
         }
 
         /// Insert a key-value pair. Silently drops if at capacity or key already exists.
         /// The key is duped internally; the caller owns the value.
         pub fn put(self: *Self, key: []const u8, value: V) void {
-            self.lock.lock();
-            defer self.lock.unlock();
+            std.Io.Threaded.mutexLock(&self.lock);
+            defer std.Io.Threaded.mutexUnlock(&self.lock);
 
             if (self.count >= self.max_entries) return;
 

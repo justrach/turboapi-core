@@ -13,6 +13,14 @@ const Router = root.Router;
 
 const print = std.debug.print;
 
+fn nowNs() i96 {
+    return std.Io.Clock.awake.now(std.Io.Threaded.global_single_threaded.io()).toNanoseconds();
+}
+
+fn elapsedNs(start_ns: i96) u64 {
+    return @intCast(nowNs() - start_ns);
+}
+
 // Use volatile sink to prevent dead code elimination
 var volatile_sink: usize = 0;
 fn doNotOptimize(val: anytype) void {
@@ -122,7 +130,7 @@ pub fn main() !void {
         match_count = 0;
         miss_count = 0;
         var total: u64 = 0;
-        var timer = std.time.Timer.start() catch unreachable;
+        const start_ns = nowNs();
 
         for (0..iters) |_| {
             for (lookups) |l| {
@@ -143,7 +151,7 @@ pub fn main() !void {
             }
         }
 
-        const elapsed_ns = timer.read();
+        const elapsed_ns = elapsedNs(start_ns);
         const ns_per_op = elapsed_ns / total;
         const ops_per_sec = if (ns_per_op > 0) 1_000_000_000 / ns_per_op else 0;
 
@@ -162,7 +170,7 @@ pub fn main() !void {
         // Generate paths at runtime so the compiler can't intern them
         var path_buf: [256]u8 = undefined;
 
-        var timer = std.time.Timer.start() catch unreachable;
+        const start_ns = nowNs();
 
         for (0..iters) |i| {
             // /api/v1/users/{varying_id}
@@ -207,7 +215,7 @@ pub fn main() !void {
             total += 1;
         }
 
-        const elapsed_ns = timer.read();
+        const elapsed_ns = elapsedNs(start_ns);
         const ns_per_op = elapsed_ns / total;
         const ops_per_sec = if (ns_per_op > 0) 1_000_000_000 / ns_per_op else 0;
 
@@ -236,7 +244,7 @@ pub fn main() !void {
         var total: u64 = 0;
         var path_buf2: [256]u8 = undefined;
 
-        var timer = std.time.Timer.start() catch unreachable;
+        const start_ns = nowNs();
 
         for (0..iters) |i| {
             const ns = i % 20;
@@ -249,7 +257,7 @@ pub fn main() !void {
             total += 1;
         }
 
-        const elapsed_ns = timer.read();
+        const elapsed_ns = elapsedNs(start_ns);
         const ns_per_op = elapsed_ns / total;
         const ops_per_sec = if (ns_per_op > 0) 1_000_000_000 / ns_per_op else 0;
 
