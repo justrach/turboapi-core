@@ -17,20 +17,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.16.0
-
-      - name: Run unit tests
-        run: zig build test
-
-      - name: Run adversarial router benchmark
+      - name: Resolve benchmark base Zig version
+        id: benchmark-base
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          ./scripts/ci_benchmark_gate.sh "$BASE_SHA"
+          base_version="$(
+            git show "$BASE_SHA:build.zig.zon" \
+              | sed -n 's/^[[:space:]]*\.minimum_zig_version = "\([^"]*\)",/\1/p'
+          )"
+          test -n "$base_version"
+          echo "version=$base_version" >> "$GITHUB_OUTPUT"
+
+      - name: Install benchmark base Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.benchmark-base.outputs.version }}
+          use-cache: false
+
+      - name: Capture benchmark base Zig
+        run: echo "BASE_ZIG=$(command -v zig)" >> "$GITHUB_ENV"
+
+      - name: Install candidate Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0-dev.1862+40ebd8162
+
+      - name: Capture candidate Zig
+        run: echo "CANDIDATE_ZIG=$(command -v zig)" >> "$GITHUB_ENV"
+
+      - name: Run unit tests
+        run: |
+          "$CANDIDATE_ZIG" build test
+
+      - name: Run adversarial router benchmark
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: ./scripts/ci_benchmark_gate.sh "$BASE_SHA"
 
   fuzz-seeds:
     name: "fuzz seed corpus"
@@ -41,7 +65,7 @@ jobs:
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.16.0
+          version: 0.17.0-dev.1862+40ebd8162
 
       - name: Run fuzz seed corpus (router + http)
         run: zig build test

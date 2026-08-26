@@ -2,7 +2,7 @@
     .name = .turboapi_core,
     .fingerprint = 0x160efbab8247370e,
     .version = "0.1.0",
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0-dev.1862+40ebd8162",
     .dependencies = .{},
     .paths = .{
         "build.zig",
