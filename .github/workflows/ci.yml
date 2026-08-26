@@ -20,41 +20,17 @@ jobs:
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.2
+          version: 0.16.0
 
       - name: Run unit tests
         run: zig build test
 
       - name: Run adversarial router benchmark
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          zig build-exe bench_adversarial.zig -OReleaseFast -lc
-          OUTPUT=$(./bench_adversarial 2>&1)
-          echo "$OUTPUT"
-
-          # 1. Correctness check
-          echo "$OUTPUT" | grep -q "PASS.*all correctness checks passed" || {
-            echo "FAIL: correctness check failed"
-            exit 1
-          }
-
-          # 2. Match/miss count verification (12 matches + 1 miss per iter)
-          echo "$OUTPUT" | grep -q "matches=60000000 misses=5000000" || {
-            echo "FAIL: match/miss count wrong — possible routing bug"
-            exit 1
-          }
-
-          # 3. Performance regression gate (100ns threshold — generous for CI runners)
-          NS=$(echo "$OUTPUT" | grep "Anti-DCE" -A 1 | grep "ns avg" | sed -n 's/.*[[:space:]]\([0-9]*\)ns avg/\1/p')
-          echo "Anti-DCE benchmark: ${NS}ns per lookup"
-          if [ -z "$NS" ]; then
-            echo "FAIL: could not extract benchmark result"
-            exit 1
-          fi
-          if [ "$NS" -gt 100 ]; then
-            echo "FAIL: router benchmark regression — ${NS}ns > 100ns threshold"
-            exit 1
-          fi
-          echo "PASS: ${NS}ns per lookup (threshold: 100ns)"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          ./scripts/ci_benchmark_gate.sh "$BASE_SHA"
 
   fuzz-seeds:
     name: "fuzz seed corpus"
@@ -65,7 +41,7 @@ jobs:
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.2
+          version: 0.16.0
 
       - name: Run fuzz seed corpus (router + http)
         run: zig build test
