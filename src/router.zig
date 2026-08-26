@@ -460,20 +460,22 @@ const RouteNode = struct {
         const new_len = old_len + 1;
         const first_byte = if (child.path.len > 0) child.path[0] else 0;
 
+        // Build both parallel arrays before mutating the node. If the second
+        // allocation fails, the first is released and the old state is intact.
         const new_indices = try alloc.alloc(u8, new_len);
+        errdefer alloc.free(new_indices);
+        const new_children = try alloc.alloc(*RouteNode, new_len);
+
         if (old_len > 0) {
             @memcpy(new_indices[0..old_len], self.indices);
-            alloc.free(self.indices);
-        }
-        new_indices[old_len] = first_byte;
-        self.indices = new_indices;
-
-        const new_children = try alloc.alloc(*RouteNode, new_len);
-        if (old_len > 0) {
             @memcpy(new_children[0..old_len], self.children_list);
+            alloc.free(self.indices);
             alloc.free(self.children_list);
         }
+
+        new_indices[old_len] = first_byte;
         new_children[old_len] = child;
+        self.indices = new_indices;
         self.children_list = new_children;
     }
 
@@ -501,6 +503,22 @@ const RouteNode = struct {
 };
 
 // ── Tests ───────────────────────────────────────────────────────────────────
+
+test "RouteNode.addChild leaves state unchanged when allocation fails" {
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{
+        .fail_index = 1,
+    });
+    const alloc = failing.allocator();
+
+    var parent = RouteNode.initEmpty();
+    defer parent.deinitRecursive(alloc);
+    var child = RouteNode.initEmpty();
+    child.path = "child";
+
+    try std.testing.expectError(error.OutOfMemory, parent.addChild(alloc, &child));
+    try std.testing.expectEqual(@as(usize, 0), parent.indices.len);
+    try std.testing.expectEqual(@as(usize, 0), parent.children_list.len);
+}
 
 test "static routes" {
     const alloc = std.testing.allocator;
