@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/justrach/turboapi-core"><img src="https://img.shields.io/badge/zig-0.16-f7a41d?style=flat-square" alt="Zig 0.16" /></a>
+  <a href="https://github.com/justrach/turboapi-core"><img src="https://img.shields.io/badge/zig-0.17--dev-f7a41d?style=flat-square" alt="Zig 0.17 dev" /></a>
   <img src="https://img.shields.io/badge/deps-zero-brightgreen?style=flat-square" alt="Zero deps" />
   <img src="https://img.shields.io/badge/router-43.5M%20lookups%2Fs-f7a41d?style=flat-square" alt="43.5M lookups/s" />
   <a href="https://github.com/justrach/turboapi-core/blob/main/LICENSE"><img src="https://img.shields.io/github/license/justrach/turboapi-core?style=flat-square" alt="License" /></a>
@@ -68,7 +68,7 @@ Adversarial-verified (anti-DCE, runtime-generated paths, correctness-checked). A
 
 ## Quick Start
 
-**Requirements:** Zig 0.16+
+**Requirements:** Zig 0.17.0-dev.1862+40ebd8162
 
 ### Add the dependency
 

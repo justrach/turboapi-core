@@ -18,6 +18,8 @@ base_worktree="$(mktemp -d "${temp_root%/}/turboapi-core-base.XXXXXX")"
 artifact_dir="$(mktemp -d "${temp_root%/}/turboapi-core-bench.XXXXXX")"
 base_binary="$artifact_dir/base-benchmark"
 candidate_binary="$artifact_dir/candidate-benchmark"
+base_zig="${BASE_ZIG:-zig}"
+candidate_zig="${CANDIDATE_ZIG:-zig}"
 
 cleanup() {
     git -C "$repo_root" worktree remove --force "$base_worktree" >/dev/null 2>&1 || true
@@ -34,9 +36,14 @@ fi
 
 git -C "$repo_root" worktree add --detach "$base_worktree" "$base_sha" >/dev/null
 
-zig build-exe "$base_worktree/bench_adversarial.zig" \
+base_zig_version="$("$base_zig" version)"
+candidate_zig_version="$("$candidate_zig" version)"
+echo "Base compiler: $base_zig_version"
+echo "Candidate compiler: $candidate_zig_version"
+
+"$base_zig" build-exe "$base_worktree/bench_adversarial.zig" \
     -OReleaseFast -lc -femit-bin="$base_binary"
-zig build-exe "$repo_root/bench_adversarial.zig" \
+"$candidate_zig" build-exe "$repo_root/bench_adversarial.zig" \
     -OReleaseFast -lc -femit-bin="$candidate_binary"
 
 run_sample() {
